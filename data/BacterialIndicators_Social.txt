@@ -1,0 +1,11 @@
+OTU	Cluster	IndVal	Prob	Domain	Phylum	Class	Order	Family	Genus
+Otu00002	1	0.442068156018459	0.001	Bacteria	Proteobacteria	Gammaproteobacteria	Enterobacteriales	Enterobacteriaceae	Enterobacteriaceae_unclassified
+Otu00004	1	0.593115114523055	0.001	Bacteria	Proteobacteria	Gammaproteobacteria	Pseudomonadales	Pseudomonadaceae	Pseudomonas
+Otu00009	1	0.586207333314624	0.002	Bacteria	Proteobacteria	Gammaproteobacteria	Pseudomonadales	Moraxellaceae	Acinetobacter
+Otu00019	1	0.584191874599963	0.004	Bacteria	Bacteroidetes	Flavobacteriia	Flavobacteriales	Flavobacteriaceae	Chryseobacterium
+Otu00021	1	0.579339967657753	0.001	Bacteria	Proteobacteria	Alphaproteobacteria	Rhizobiales	Rhizobiales_unclassified	Rhizobiales_unclassified
+Otu00024	1	0.565131572233038	0.001	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Stappia
+Otu00027	1	0.51302567649104	0.001	Bacteria	Actinobacteria	Actinobacteria	Actinomycetales	Micrococcaceae	Arthrobacter
+Otu00030	1	0.572589771024356	0.001	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Rhodobacteraceae_unclassified
+Otu00028	2	0.452207705990207	0.03	Bacteria	Proteobacteria	Alphaproteobacteria	Rhodobacterales	Rhodobacteraceae	Paracoccus
+Otu00057	2	0.567302929247026	0.01	Bacteria	Planctomycetes	Planctomycetia	Planctomycetales	Planctomycetaceae	Planctomycetaceae_unclassified

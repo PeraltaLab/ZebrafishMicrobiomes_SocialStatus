@@ -1,0 +1,535 @@
+---
+title: Social status effects on zebrafish gut microbiomes
+author: "Emily Scott, Fadi Issa, Michael Brewer, Ariane L. Peralta"
+date: "Last updated on `r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: null
+  html_document:
+    df_print: paged
+  word_document: default
+  fig_caption: yes
+header-includes:
+- \usepackage{array}
+- \usepackage{graphics}
+- \usepackage[utf8]{inputenc}
+---
+
+Project Description: Fill out
+
+# Initial Setup
+```{r Initial Setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+#setwd("~/Desktop/ES20_ZebrafishMicrobiomes/data")
+setwd("~/Github/ES20_ZebrafishMicrobiomes/analyses")
+se <- function(x, ...){sd(x, na.rm = TRUE)/sqrt(length(na.omit(x)))}
+ci <- function(x, ...){1.96 * sd(x,na.rm = TRUE)}
+
+# Code Dependencies
+source("../bin/DiversityFunctions.R")
+source("../bin/MothurTools.R")
+require("vegan"); require("ecodist");
+require("dplyr"); require("reshape2"); require("labdsv")
+require("nlme"); require("MASS"); require("ade4"); require("phytools")
+require("png"); require("grid"); require("ggplot2")
+require("ape"); require("picante");
+require("cowplot"); require("ggpubr"); require("devtools"); require("tidyr")
+require("patchwork")
+```
+#Import Files
+## Environmental Data
+```{r Import Files - Env, include=FALSE}
+# Import Environmental Data
+design <- read.csv("../data/ES_ZF_design.csv", row.names=1) #by setting working directory, you can use a shortcut filepath
+
+design$Social.Status <- as.factor(design$Social.Status)
+design$Day <- as.factor(design$Day)
+```
+## Bacterial Data
+```{r Import Files - Bacteria, include=FALSE}
+# Import OTU data
+# Import Raw Data
+otu.in <- read.otu("../data/EM20_ZF_16S.opti_mcc.shared") #by setting working directory, you can use a shortcut filepath
+```
+
+```{r Match design and otu IDs, include=FALSE}
+# OTU table - remove otus w/ < 2 occurrences across all sites
+
+otu_keep <- otu.in[, which(colSums(otu.in) >= 2)]
+dim(otu_keep)
+
+aa <- (rowSums(otu_keep))
+aa
+
+# OTU table - removed low abundance samples
+otu_low_remov <- otu_keep[which(rowSums(otu_keep) >= 6000), ]
+dim(otu_low_remov)
+
+otu_final <- otu_low_remov[-c(94:97),] #removed Water, positive, negative
+dim(otu_final)
+
+# OTU table - odd sites in bacterial composition data and remove in design file
+odd.sites <- c("F_Iso4_D0","F_P3_D14","F_Iso6_D14","Water_R1","Water_R2","mock_positive","negative","positive")
+design_final <- design[setdiff(rownames(design), odd.sites), ]
+dim(design_final)
+dim(otu_final)
+otu_final <- otu_final[match(rownames(design_final), rownames(otu_final)),] #make sure rows are in the same order
+all.equal(rownames(design_final), rownames(otu_final))
+
+# Import Taxonomy File for later
+tax_df <- read.tax(taxonomy = "../data/EM20_ZF_16S.opti_mcc.0.03.cons.taxonomy", 
+                    format = "rdp", tax.levels = 6, col.tax = 3)
+
+tax_df <- as.data.frame(tax_df)
+```
+# Diversity Metrics - Hypothesis Testing
+```{r}
+#install.packages("Rarefy")
+#install.packages("rrarefy")
+```
+
+```{r Diversity Metrics Bacteria calcs, echo=TRUE}
+# Rarefy Abundances (min abundance is 10181. We are sampling to 10181)
+min(rowSums(otu_final))
+otus.r <- rrarefy(otu_final, 10181)
+
+# Fisher's Alpha
+fisher <- fisher.alpha(otus.r)
+
+# Chao 1 species estimator
+bc_alpha_div <- estimateR(otus.r)
+
+bc_alpha_div_df <- as.data.frame(bc_alpha_div)
+
+bc_alpha_div_df_t <- t(bc_alpha_div_df)
+
+bc_alpha_div_df_t <- as.data.frame(bc_alpha_div_df_t)
+
+write.csv(bc_alpha_div_df_t,"../data/zf_bact_diversity.csv")
+
+# Species Richness
+richness <- rowSums((otu_final >= 1))
+
+# Shannon Diversity
+shannon <- diversity(otus.r, "shannon")
+
+# Simpson's Evenness
+simp.even <- apply(otus.r, 1, simp_even)
+
+#Pielou’s evenness
+J <- shannon/log(specnumber(otus.r[,-c(1:1)]))
+
+#combined richness, diversity, evenness
+diversity <- cbind(design_final,richness,shannon,simp.even,J,bc_alpha_div_df_t)
+write.csv(diversity,"../data/zf_diversity.csv")
+```
+
+# Diversity Metrics - Hypothesis Testing - by species
+```{r Hypothesis Testing Bacteria both, echo=TRUE}
+#summary table for bacterial diversity
+diversity <- read.csv("../data/zf_diversity.csv", row.names=1) 
+
+summary <- diversity %>% group_by(Social.Status, Day) %>% summarise(mean.richness=mean(richness), se.richness=se(richness), mean.shannon=mean(shannon), se.shannon=se(shannon))
+print(summary)
+#write.csv(summary,"../Desktop/ES20_ZebrafishMicrobiomes/data/diversity.bact.summary.csv")
+
+library(emmeans)
+library(lmerTest) 
+
+richness.lm <- lm(richness ~ Social.Status*Day, data = diversity)
+richness.lm
+summary(richness.lm)
+
+chao1.lm <- lm(S.chao1 ~ Social.Status*Day, data = diversity)
+chao1.lm
+summary(chao1.lm)
+anova(chao1.lm)
+
+shannon.lm <- lm(shannon ~ Social.Status*Day, data = diversity)
+shannon.lm
+summary(shannon.lm)
+anova(shannon.lm)
+
+emmeans(shannon.lm, pairwise ~ Social.Status*Day)
+
+evenness.lm <- lm(simp.even ~ Social.Status*Day, data = diversity)
+evenness.lm
+summary(evenness.lm)
+anova(evenness.lm)
+
+emmeans(evenness.lm, pairwise ~ Day)
+# contrast        estimate      SE df t.ratio p.value
+ # Day_7 - Day_14  -0.02593 0.00811 77  -3.195  0.0107
+
+```
+#Plot Richness
+```{r Plot Chao1, echo=TRUE}
+diversity$Day <- factor(diversity$Day,      # Reordering group factor levels
+                         levels = c("Day_IP", "Day_0", "Day_7", "Day_14"))
+
+# Graphing Chao1
+p <- ggplot(diversity, aes(x=Social.Status, y=S.chao1, color=as.factor(Social.Status)))+ 
+  geom_boxplot() + theme_bw() +
+  geom_point(aes(color=factor(Social.Status)), size=2, position = position_jitterdodge()) +       
+  scale_color_manual(name="Social Status", 
+                     values=c("#B2182B", "#0077BB", "#9970AB", "#BBBBBB"), 
+                     labels = c("dominant", "subordinate", "communal", "isolate")) + 
+  facet_grid(.~Day)
+
+chao1 <- p + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line 
+          =element_line(colour = "black")) + 
+    theme(axis.ticks.length=unit(0.3,"cm")) + 
+    theme(axis.text.y = element_text(size=12)) +
+  labs(x = "Social Status", y = "Chao 1 Richness") + 
+    theme(strip.text.x = element_text(size=14, face="italic"), strip.text.y =   
+          element_text(size=14, face="bold"), strip.background = element_rect(colour="black",
+          fill="white", size=1)) +
+          scale_x_discrete(breaks=c("dominant", "subordinate", "communal", "isolate"),
+                           labels=c("dominant", "subordinate", "communal", "isolate")) +
+      theme(axis.title=element_text(vjust=1,size=14,face="bold"),
+          axis.text=element_text(size=12), panel.border = element_rect(colour = "black",size=1)) + 
+      theme(axis.text.x = element_text(angle = 45))
+
+chao1
+ggsave("../figures/chao1.png", plot=last_plot(), device=NULL, path=NULL, scale=1, width=8, height=5, dpi=300, limitsize=TRUE)
+```
+
+#Plot shannon diversity 
+```{r Plot - Shannon Diversity, echo=TRUE}
+# Graphing Shannon Diversity
+p <- ggplot(diversity, aes(x=Social.Status, y=shannon, color=as.factor(Social.Status)))+ 
+  geom_boxplot() +
+  geom_point(aes(color=factor(Social.Status)), size=2, position = position_jitterdodge()) +       
+  scale_color_manual(name="Social Status", values=c("#B2182B", "#0077BB", "#9970AB", "#BBBBBB"), 
+                     labels = c("dominant", "subordinate", "communal", "isolate")) + 
+  facet_grid(.~Day)
+
+shannon <- p + theme_bw() + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line 
+          =element_line(colour = "black")) + 
+    theme(axis.title=element_text(vjust=1,size=14,face="bold"),
+          axis.text=element_text(size=14), axis.text.x = element_text(vjust=0.65, hjust=0.5, 
+          size=14), panel.border = element_rect(colour = "black",size=1)) + 
+    theme(axis.ticks.length=unit(0.3,"cm")) + 
+  labs(x = "Social Status", y = "Shannon Diversity Index (H')") + 
+    theme(strip.text.x = element_text(size=14, face="italic"), strip.text.y =   
+          element_text(size=14, face="bold"), strip.background = element_rect(colour="black",
+          fill="white", size=1)) +
+          scale_x_discrete(breaks=c("dominant", "subordinate", "communal", "isolate"),
+                           labels=c("dominant", "subordinate", "communal", "isolate"))
+shannon
+ggsave("../figures/shannon.png", plot=last_plot(), device=NULL, path=NULL, scale=1, width=8, height=5, dpi=300, limitsize=TRUE)
+```
+
+#Plot Evenness 
+```{r Plot Simpson Evenness, echo=TRUE}
+# Graphing Simpson's Evenness
+p <- ggplot(diversity, aes(x=Social.Status, y=simp.even, color=as.factor(Social.Status)))+ 
+  geom_boxplot() +
+  geom_point(aes(color=factor(Social.Status)), size=2, position = position_jitterdodge()) +       
+  scale_color_manual(name="Social Status", values=c("#B2182B", "#0077BB", "#9970AB", "#BBBBBB"), 
+                     labels = c("dominant", "subordinate", "communal", "isolate")) + facet_grid(.~Day)
+
+simpeven <- p + theme_bw() + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line 
+          =element_line(colour = "black")) + 
+    theme(axis.title=element_text(vjust=1,size=14,face="bold"),
+          axis.text=element_text(size=14), axis.text.x = element_text(vjust=0.65, hjust=0.5, 
+          size=14), panel.border = element_rect(colour = "black",size=1)) + 
+    theme(axis.ticks.length=unit(0.3,"cm")) + 
+  labs(x = "Social Status", y = "Simpson's Evenness") + 
+    theme(strip.text.x = element_text(size=14, face="italic"), strip.text.y =   
+          element_text(size=14, face="bold"), strip.background = element_rect(colour="black",
+          fill="white", size=1)) +
+          scale_x_discrete(breaks=c("dominant", "subordinate", "communal", "isolate"),
+                           labels=c("dominant", "subordinate", "communal", "isolate"))
+simpeven
+ggsave("../figures/simpeven.png", plot=last_plot(), device=NULL, path=NULL, scale=1, width=8, height=5, dpi=300, limitsize=TRUE)
+```
+# Combine diversity plots
+```{r combine diversity, echo=TRUE}
+#combining plots
+#p1 <- chao1
+#p2 <- shannon
+#p3 <- simpeven
+
+p1 / p2 / p3
+
+#ggsave("../figures/Figure_PD_RelAbun_Cmin_Combined.png", plot=last_plot(), device=NULL, path=NULL, scale=1,  width=10, height=5, dpi=500, limitsize=TRUE)
+```
+
+# Community Composition Analyses
+```{r perMANOVA, echo=TRUE}
+
+# Make Relative Abundance Matrices
+dataREL <- otu_final
+for(i in 1:dim(otu_final)[1]){
+  dataREL[i,] <- otu_final[i,]/sum(otu_final[i,])
+}
+
+#PERMANOVA
+new.data <-cbind(design_final,dataREL)
+adonis = adonis2(new.data[,-c(1:3)]~Social.Status*Day, method = "bray", data = new.data, perm=1000, set.seed=42)
+adonis
+
+# Principal Coordinates Analysis
+dataREL.dist <- vegdist(dataREL, method="bray")
+
+pcoa <- cmdscale(dataREL.dist, k=3, eig=TRUE, add=FALSE)
+  # Classical (Metric) Multidimensional Scaling; returns PCoA coordinates
+  # eig=TRUE returns eigenvalues; k = # of dimensions to calculate
+
+explainvar1b <- round(pcoa$eig[1] / sum(pcoa$eig), 3) * 100
+explainvar2b <- round(pcoa$eig[2] / sum(pcoa$eig), 3) * 100
+sum.eigb <- sum(explainvar1b, explainvar2b)
+
+explainvar1b #34.2
+explainvar2b #27.3
+
+pcoa.groups <- paste(new.data$Social.Status, new.data$Day, sep = "_")
+pcoa.points <- data.frame(pcoa$points, group = pcoa.groups)
+
+# Calculate Centroids (mean and SE)
+pcoa.L.centroids <- melt(pcoa.points, id="group", measure.vars = c("X1", "X2"))
+pcoa.centroids <- acast(pcoa.L.centroids, variable ~ group, mean)
+pcoa.centroids.se <- acast(pcoa.L.centroids, variable ~ group, se)
+pcoa.centroids.sd <- acast(pcoa.L.centroids, variable ~ group, sd)
+
+# Combine
+pcoa.cent.dataframe <- cbind(t(pcoa.centroids), t(pcoa.centroids.se))
+colnames(pcoa.cent.dataframe) <- c("V1", "V2", "V1e", "V2e")
+pcoa.cent.treats <- rownames(pcoa.cent.dataframe)
+
+Social.Status <- c("communal","communal","communal","communal","dominant","dominant","dominant","dominant","isolate","isolate","isolate","isolate","subordinate","subordinate","subordinate","subordinate")
+Day <- c("Day_0","Day_14","Day_07","Day_IP","Day_0","Day_14","Day_07","Day_IP","Day_0","Day_14","Day_07","Day_IP","Day_0","Day_14","Day_07","Day_IP")
+pcoa.cent.dataframe.trts <- as.data.frame(pcoa.cent.dataframe)
+pcoa.cent.dataframe.trts$Social.Status <- as.factor(Social.Status)
+pcoa.cent.dataframe.trts$Day <- as.factor(Day)
+
+#Plot
+plot1a <- ggplot(pcoa.cent.dataframe.trts, aes(x=V1, y=V2, colour=Social.Status, shape=Day)) + theme_bw()
+p <-plot1a + theme(panel.grid.major = element_blank(), 
+                   panel.grid.minor = element_blank(), 
+                   axis.line = element_line(colour = "black")) +
+  theme(panel.background = element_blank()) + 
+  geom_errorbarh(aes(xmax=V1+V1e, xmin=V1-V1e, height=0.01), colour="black") +    
+  geom_errorbar(aes(ymax=V2+V2e, ymin=V2-V2e, width=0.01), colour="black") +
+  geom_point(aes(colour=Social.Status), size=5, stroke = 0.75, show.legend = TRUE) + 
+  scale_colour_manual(labels = c("dominant","subordinate","communal","isolate"), 
+                      values = c("#B2182B", "#0077BB", "#9970AB", "#BBBBBB")) +
+  scale_shape_manual(values = c(15,16,17,18)) +
+  theme(axis.title = element_text(size=14), axis.text=element_text(size=14),
+          axis.text.x = element_text(size=14), 
+          panel.border = element_rect(colour = "black", size=1.25)) + 
+  theme(axis.ticks.length=unit(0.3,"cm")) + 
+  xlab("PCoA 1 (34.2%)") + ylab("PCoA 2 (27.3%)") +
+  labs(colour = "Social Status") +
+  guides(colour = guide_legend(override.aes = list(pch=16,size = 4)))+
+  ggtitle(label="Social Status Zebrafish Gut Microbiomes") + 
+  theme(plot.title = element_text(color="black", size=14, face="bold.italic"))
+p
+
+ggsave("../figures/zf_PCoAordination.png", plot=last_plot(), device=NULL, path=NULL, scale=1, width=7, height=5, dpi=300, limitsize=TRUE)
+```
+
+# Bacterial community indicator species analysis
+```{r Bacteria Indicator Species i, eval=FALSE, include=FALSE}
+library("labdsv")
+
+new.data$Social.Status <- droplevels(new.data$Social.Status) #remove unused factor levels
+new.data$Day <- droplevels(new.data$Day) #remove unused factor levels
+
+levels(new.data$Social.Status)
+levels(new.data$Day)
+group = interaction(new.data$Social.Status, new.data$Day)
+design.type <- group
+
+dataREL.t <- dataREL[, colSums(dataREL) > 0.05]
+bac.ind <- indval(dataREL.t, design.type)
+levels(design.type)
+summary(bac.ind)
+
+#levels(design.type)
+#[1] "Communal.Day_0"     "Dominant.Day_0"     "Isolate.Day_0"      "Subordinate.Day_0" 
+#[5] "Communal.Day_14"    "Dominant.Day_14"    "Isolate.Day_14"     "Subordinate.Day_14"
+#[9] "Communal.Day_7"     "Dominant.Day_7"     "Isolate.Day_7"      "Subordinate.Day_7" 
+#[13] "Communal.Day_IP"    "Dominant.Day_IP"    "Isolate.Day_IP"     "Subordinate.Day_IP"
+
+inds <- which(bac.ind$pval <= 0.05)
+bac.indicators <- as.data.frame(matrix(NA, nrow = length(inds), ncol = 4))
+colnames(bac.indicators) <- c("OTU", "Cluster", "IndVal", "Prob")
+
+bac.indicators$OTU <- names(inds)
+bac.indicators$Cluster <- bac.ind$maxcls[inds]
+bac.indicators$IndVal <- bac.ind$indcls[inds]
+bac.indicators$Prob <- bac.ind$pval[inds]
+
+ind.tax <- tax_df[which(as.character(tax_df$OTU) %in% bac.indicators$OTU), ]
+ind.tax <- ind.tax[match(ind.tax$OTU, bac.indicators$OTU), ]
+
+indicator.bac <- cbind(bac.indicators, ind.tax[, -c(1)])
+
+indicator.bac <- indicator.bac[order(as.numeric(indicator.bac$Cluster)), ]
+
+table(indicator.bac$Cluster)
+table(indicator.bac$Phylum)
+table(indicator.bac$Cluster)
+levels(new.data$Social.Status)
+
+# Export Bacteria Indicator Table
+write.table(indicator.bac, "../data/BacterialIndicators_Day_Social.txt",
+            sep="\t", row.names = F, quote = F)
+
+
+#indicspp social status
+
+dataREL.t <- dataREL[, colSums(dataREL) > 0.05]
+bac.ind <- indval(dataREL.t, new.data$Social.Status)
+levels(new.data$Social.Status)
+summary(bac.ind)
+
+inds <- which(bac.ind$pval <= 0.05)
+bac.indicators <- as.data.frame(matrix(NA, nrow = length(inds), ncol = 4))
+colnames(bac.indicators) <- c("OTU", "Cluster", "IndVal", "Prob")
+
+bac.indicators$OTU <- names(inds)
+bac.indicators$Cluster <- bac.ind$maxcls[inds]
+bac.indicators$IndVal <- bac.ind$indcls[inds]
+bac.indicators$Prob <- bac.ind$pval[inds]
+
+ind.tax <- tax_df[which(as.character(tax_df$OTU) %in% bac.indicators$OTU), ]
+ind.tax <- ind.tax[match(ind.tax$OTU, bac.indicators$OTU), ]
+
+indicator.bac <- cbind(bac.indicators, ind.tax[, -c(1)])
+
+indicator.bac <- indicator.bac[order(as.numeric(indicator.bac$Cluster)), ]
+
+table(indicator.bac$Cluster)
+table(indicator.bac$Phylum)
+table(indicator.bac$Cluster)
+levels(new.data$Social.Status)
+
+#levels(new.data$Social.Status)
+#[1] "Communal"    "Dominant"    "Isolate"     "Subordinate"
+
+# Export Bacteria Indicator Table
+write.table(indicator.bac, "../data/BacterialIndicators_Social.txt",
+            sep="\t", row.names = F, quote = F)
+
+#indicspp day
+
+dataREL.t <- dataREL[, colSums(dataREL) > 0.05]
+bac.ind <- indval(dataREL.t, new.data$Day)
+levels(new.data$Day)
+summary(bac.ind)
+
+inds <- which(bac.ind$pval <= 0.05)
+bac.indicators <- as.data.frame(matrix(NA, nrow = length(inds), ncol = 4))
+colnames(bac.indicators) <- c("OTU", "Cluster", "IndVal", "Prob")
+
+bac.indicators$OTU <- names(inds)
+bac.indicators$Cluster <- bac.ind$maxcls[inds]
+bac.indicators$IndVal <- bac.ind$indcls[inds]
+bac.indicators$Prob <- bac.ind$pval[inds]
+
+ind.tax <- tax_df[which(as.character(tax_df$OTU) %in% bac.indicators$OTU), ]
+ind.tax <- ind.tax[match(ind.tax$OTU, bac.indicators$OTU), ]
+
+indicator.bac <- cbind(bac.indicators, ind.tax[, -c(1)])
+
+indicator.bac <- indicator.bac[order(as.numeric(indicator.bac$Cluster)), ]
+
+table(indicator.bac$Cluster)
+table(indicator.bac$Phylum)
+table(indicator.bac$Cluster)
+levels(new.data$Day)
+
+#levels(new.data$Day)
+#[1] "Day_0"  "Day_14" "Day_7"  "Day_IP"
+
+# Export Bacteria Indicator Table
+write.table(indicator.bac, "../data/BacterialIndicators_Day.txt",
+            sep="\t", row.names = F, quote = F)
+```
+
+```{r stacked bar graphs}
+zebrafish_16s <- import_mothur(mothur_shared_file = "../data/EM20_ZF_16S.opti_mcc.shared", mothur_constaxonomy_file = "../data/EM20_ZF_16S.opti_mcc.0.03.cons.taxonomy")
+zebrafish_16s
+sample <- sample_data(design)
+sample_data(zebrafish_16s)<- sample
+
+zebrafish_16s
+
+colnames(tax_table(zebrafish_16s))
+
+colnames(tax_table(zebrafish_16s)) <- c("Kingdom", "Phylum", "Class", 
+  "Order", "Family", "Genus")
+
+after_remove_low_depth <- prune_samples(sample_sums(zebrafish_16s) >= 6000, zebrafish_16s)
+head(sample_sums(after_remove_low_depth))
+
+set.seed(1)
+rare <- rarefy_even_depth(after_remove_low_depth, sample.size = 6000,rngseed=TRUE)
+
+head(sample_sums(rare))
+
+#remove the NTC sample. Check to make sure it doesn't have too many sequences before you through it away though!
+to_remove <- c("NTC")
+pruned <- prune_samples(!(rownames(sample_data(rare)) %in% to_remove), rare)
+
+#filter out OTUs less than 10
+#darte_ed_16s_filter <- filter_taxa(pruned, function(x) sum(x) > 10, TRUE)
+
+ #relative abundance
+zebrafish_16s_filter_re <- transform_sample_counts(pruned, function(x) x /sum(x))
+
+#Get rid of small taxa
+zebrafish_16s_filter2 <- filter_taxa(zebrafish_16s_filter_re, function(x) sum(x) > .001, TRUE)
+
+#Combine OTUs with common taxa
+zebrafish_16s_filter_re_g = tax_glom(zebrafish_16s_filter2, "Phylum")
+zebrafish_16s_filter_re_g2 = tax_glom(zebrafish_16s_filter2, "Genus")
+
+
+zebrafish_genus <- zebrafish_16s %>%
+  tax_glom(taxrank = "Genus") %>%                     # agglomerate at phylum level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  psmelt() %>%                                         # Melt to long format
+  filter(Abundance > 0.05) %>%                         # Filter out low abundance taxa
+  arrange(Genus)                                      # Sort data frame alphabetically by phylum
+# Set colors for plotting
+genus_colors <- c(
+  "salmon", "darkseagreen", "gold", "magenta", "slateblue", "bisque", "darkred", "cadetblue", "darkorange", "royalblue1", "orchid4", "seagreen", "thistle1", "skyblue1", "darkslateblue", "deeppink", "goldenrod2", "plum2", "antiquewhite", "aquamarine", "blue", "burlywood4", "cornflowerblue", "coral", "darkgray", "darkgreen", "darkorchid", "darksalmon", "firebrick1", "dimgray", "firebrick4", "darkseagreen1", "burlywood", "lavender", "lightcoral", "lightblue1" 
+)
+
+
+# Plot 
+a <- list(
+  font = list(size = 14),
+  xref = "paper",
+  yref = "paper",
+  yanchor = "bottom",
+  xanchor = "center",
+  align = "center",
+  x = 0.5,
+  y = 1,
+  showarrow = FALSE)
+
+zebrafish_genus_v2 <- subset(zebrafish_genus, Social.Status == "Dominant" | Social.Status == "Subordinate" | Social.Status == "Communal" | Social.Status == "Isolate")
+
+ggplot(transform(zebrafish_genus_v2, Day=factor(Day, levels=c("Day_IP","Day_0","Day_7","Day_14"))), aes(x = Day, y = Abundance, fill = Genus), annotations=a) + 
+  facet_grid(Social.Status~.) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = genus_colors) +
+  scale_x_discrete(labels = c("Day_IP", "Day_0", "Day_7", "Day_14"), drop = TRUE) +
+  # Remove x axis title
+  theme(axis.title.x = element_blank()) + 
+  #
+  guides(fill = guide_legend(reverse = TRUE, keywidth = 1, keyheight = 1)) +
+  ylab("Relative Abundance (Genus > 5%)") +
+  ggtitle("Genus Composition of Zebrafish \n Bacterial Communities by Social Status") 
+
+ggsave("../figures/genuscomp.png", plot=last_plot(), device=NULL, path=NULL, scale=1, width=7, height=5, dpi=300, limitsize=TRUE)
+```
+
