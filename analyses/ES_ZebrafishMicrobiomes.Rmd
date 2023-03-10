@@ -83,12 +83,7 @@ tax_df <- read.tax(taxonomy = "../data/EM20_ZF_16S.opti_mcc.0.03.cons.taxonomy",
 
 tax_df <- as.data.frame(tax_df)
 ```
-# Diversity Metrics - Hypothesis Testing
-```{r}
-#install.packages("Rarefy")
-#install.packages("rrarefy")
-```
-
+# Diversity Metrics
 ```{r Diversity Metrics Bacteria calcs, echo=TRUE}
 # Rarefy Abundances (min abundance is 10181. We are sampling to 10181)
 min(rowSums(otu_final))
@@ -136,7 +131,6 @@ str(diversity)
 
 summary <- diversity %>% group_by(Social.Status, Day) %>% summarise(mean.richness=mean(richness), se.richness=se(richness), mean.shannon=mean(shannon), se.shannon=se(shannon))
 print(summary)
-#write.csv(summary,"../Desktop/ES20_ZebrafishMicrobiomes/data/diversity.bact.summary.csv")
 
 library(emmeans)
 library(lmerTest) 
@@ -150,6 +144,16 @@ chao1.lm
 summary(chao1.lm)
 anova(chao1.lm)
 
+emmeans(chao1.lm, pairwise ~ Day)
+
+ #contrast        estimate   SE df t.ratio p.value
+ #Day_0 - Day_14    104.69 49.4 77   2.120  0.1559
+ #Day_0 - Day_7     -11.34 48.2 77  -0.235  0.9954
+ #Day_0 - Day_IP    -14.32 48.2 77  -0.297  0.9908
+ #Day_14 - Day_7   -116.03 48.8 77  -2.378  0.0900
+ #Day_14 - Day_IP  -119.01 48.8 77  -2.439  0.0783
+ #Day_7 - Day_IP     -2.98 47.6 77  -0.063  0.9999
+ 
 shannon.lm <- lm(shannon ~ Social.Status*Day, data = diversity)
 shannon.lm
 summary(shannon.lm)
@@ -163,9 +167,7 @@ summary(evenness.lm)
 anova(evenness.lm)
 
 emmeans(evenness.lm, pairwise ~ Day)
-# contrast        estimate      SE df t.ratio p.value
- # Day_7 - Day_14  -0.02593 0.00811 77  -3.195  0.0107
-
+emmeans(evenness.lm, pairwise ~ Social.Status*Day)
 ```
 #Plot Richness
 ```{r Plot Chao1, echo=TRUE}
@@ -345,10 +347,10 @@ levels(design.type)
 summary(bac.ind)
 
 #levels(design.type)
-#[1] "Communal.Day_0"     "Dominant.Day_0"     "Isolate.Day_0"      "Subordinate.Day_0" 
-#[5] "Communal.Day_14"    "Dominant.Day_14"    "Isolate.Day_14"     "Subordinate.Day_14"
-#[9] "Communal.Day_7"     "Dominant.Day_7"     "Isolate.Day_7"      "Subordinate.Day_7" 
-#[13] "Communal.Day_IP"    "Dominant.Day_IP"    "Isolate.Day_IP"     "Subordinate.Day_IP"
+# [1] "1_Dominant.Day_0"     "2_Subordinate.Day_0"  "3_Communal.Day_0"     "4_Isolate.Day_0"     
+# [5] "1_Dominant.Day_14"    "2_Subordinate.Day_14" "3_Communal.Day_14"    "4_Isolate.Day_14"    
+# [9] "1_Dominant.Day_7"     "2_Subordinate.Day_7"  "3_Communal.Day_7"     "4_Isolate.Day_7"     
+#[13] "1_Dominant.Day_IP"    "2_Subordinate.Day_IP" "3_Communal.Day_IP"    "4_Isolate.Day_IP"  
 
 inds <- which(bac.ind$pval <= 0.05)
 bac.indicators <- as.data.frame(matrix(NA, nrow = length(inds), ncol = 4))
@@ -403,9 +405,6 @@ table(indicator.bac$Cluster)
 table(indicator.bac$Phylum)
 table(indicator.bac$Cluster)
 levels(new.data$Social.Status)
-
-#levels(new.data$Social.Status)
-#[1] "Communal"    "Dominant"    "Isolate"     "Subordinate"
 
 # Export Bacteria Indicator Table
 write.table(indicator.bac, "../data/BacterialIndicators_Social.txt",
