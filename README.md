@@ -2,7 +2,7 @@
 
 This repository contains open-source code, data, & text files.
 
-Raw amplicon sequence files can be found at NCBI SRA [(BioProject PRJNA925886)](https://www.ncbi.nlm.nih.gov/bioproject/?term=PRJNA925886).
+Raw amplicon sequence files can be found at NCBI SRA [BioProject PRJNA925886](https://www.ncbi.nlm.nih.gov/bioproject/?term=PRJNA925886).
 
 
 ## Manuscript submitted
