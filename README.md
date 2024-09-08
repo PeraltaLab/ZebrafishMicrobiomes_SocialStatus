@@ -2,7 +2,8 @@
 
 This repository contains open-source code, data, & text files.
 
-Raw amplicon sequence files can be found at NCBI SRA [BioProject ID](in progress).
+Raw amplicon sequence files can be found at NCBI SRA [BioProject PRJNA925886](https://www.ncbi.nlm.nih.gov/bioproject/?term=PRJNA925886).
+
 
 ## Manuscript submitted
 Scott, E. M.S. Brewer, A.L. Peralta, F.A. Issa. The effects of social experience on host gut microbiome in male zebrafish (Danio rerio)
