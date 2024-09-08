@@ -4,9 +4,9 @@ This repository contains open-source code, data, & text files.
 
 Raw amplicon sequence files can be found at NCBI SRA [BioProject PRJNA925886](https://www.ncbi.nlm.nih.gov/bioproject/?term=PRJNA925886).
 
+## Manuscript published
 
-## Manuscript submitted
-Scott, E. M.S. Brewer, A.L. Peralta, F.A. Issa. The effects of social experience on host gut microbiome in male zebrafish (Danio rerio)
+For information regarding the project, please visit: Scott, E., Brewer, M.S., Peralta, A.L. and Issa, F.A., 2023. The effects of social experience on host gut microbiome in male zebrafish (Danio rerio). The Biological Bulletin, 244(3), pp.177-189. [PDF](https://doi.org/10.1086/729377) 
 
 ## We address the following aim:
 
